@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Svg, { Circle, RadialGradient, Defs, Stop, Line } from 'react-native-svg';
+import { useLanguage } from '../i18n/LanguageContext';
 
 type RootStackParamList = {
     Home: undefined;
-    Game: { gameId: string };
+    Game: { gameId: string; difficulty: string };
 };
 
 interface HomeScreenProps {
@@ -15,16 +16,23 @@ interface HomeScreenProps {
 const { width } = Dimensions.get('window');
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
+    const { t, language, toggleLanguage } = useLanguage();
+    const [difficulty, setDifficulty] = useState<'easy' | 'pro'>('pro');
+
     const handleNewGame = () => {
-        navigation.navigate('Game', { gameId: 'new' });
+        navigation.navigate('Game', { gameId: 'new', difficulty });
     };
 
     return (
         <View style={styles.container}>
+            <TouchableOpacity style={styles.langButton} onPress={toggleLanguage} activeOpacity={0.7}>
+                <Text style={styles.langButtonText}>{language === 'en' ? '中' : 'EN'}</Text>
+            </TouchableOpacity>
+
             <View style={styles.content}>
                 <View style={styles.titleSection}>
-                    <Text style={styles.title}>KataGo</Text>
-                    <Text style={styles.subtitle}>AI-Powered Go Game</Text>
+                    <Text style={styles.title}>{t.appName}</Text>
+                    <Text style={styles.subtitle}>{t.appSubtitle}</Text>
                 </View>
 
                 <View style={styles.iconContainer}>
@@ -41,27 +49,50 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
                     </Svg>
                 </View>
 
+                <View style={styles.difficultySection}>
+                    <Text style={styles.difficultyLabel}>{t.difficulty}</Text>
+                    <View style={styles.difficultyRow}>
+                        <TouchableOpacity
+                            style={[styles.difficultyButton, difficulty === 'easy' && styles.difficultyButtonEasy]}
+                            onPress={() => setDifficulty('easy')}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.difficultyText, difficulty === 'easy' && styles.difficultyTextActive]}>
+                                {t.easy}
+                            </Text>
+                            <Text style={styles.difficultySub}>Simple AI</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.difficultyButton, difficulty === 'pro' && styles.difficultyButtonPro]}
+                            onPress={() => setDifficulty('pro')}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.difficultyText, difficulty === 'pro' && styles.difficultyTextActive]}>
+                                {t.professional}
+                            </Text>
+                            <Text style={styles.difficultySub}>KataGo</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
                 <TouchableOpacity style={styles.newGameButton} onPress={handleNewGame} activeOpacity={0.8}>
-                    <Text style={styles.newGameButtonText}>New Game vs AI</Text>
+                    <Text style={styles.newGameButtonText}>{t.newGameVsAI}</Text>
                 </TouchableOpacity>
 
-                <Text style={styles.description}>
-                    Play against KataGo AI on a 19×19 board.{'\n'}
-                    You play as Black, KataGo plays as White.
-                </Text>
+                <Text style={styles.description}>{t.homeDescription}</Text>
 
                 <View style={styles.statsRow}>
                     <View style={styles.statCard}>
                         <Text style={styles.statValue}>19×19</Text>
-                        <Text style={styles.statLabel}>Board</Text>
+                        <Text style={styles.statLabel}>{t.board}</Text>
                     </View>
                     <View style={styles.statCard}>
                         <Text style={styles.statValue}>6.5</Text>
-                        <Text style={styles.statLabel}>Komi</Text>
+                        <Text style={styles.statLabel}>{t.komi}</Text>
                     </View>
                     <View style={styles.statCard}>
                         <Text style={styles.statValue}>AI</Text>
-                        <Text style={styles.statLabel}>Opponent</Text>
+                        <Text style={styles.statLabel}>{t.opponent}</Text>
                     </View>
                 </View>
             </View>
@@ -76,6 +107,21 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
+    },
+    langButton: {
+        position: 'absolute',
+        top: 56,
+        right: 20,
+        backgroundColor: '#1f2937',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        zIndex: 10,
+    },
+    langButtonText: {
+        color: '#34d399',
+        fontSize: 14,
+        fontWeight: '600',
     },
     content: {
         alignItems: 'center',
@@ -98,25 +144,62 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     iconContainer: {
-        width: 96,
-        height: 96,
-        borderRadius: 48,
-        backgroundColor: '#1f2937',
-        justifyContent: 'center',
-        alignItems: 'center',
         marginBottom: 32,
+    },
+    difficultySection: {
+        width: '100%',
+        marginBottom: 24,
+        alignItems: 'center',
+    },
+    difficultyLabel: {
+        fontSize: 14,
+        color: '#9ca3af',
+        marginBottom: 10,
+    },
+    difficultyRow: {
+        flexDirection: 'row',
+        backgroundColor: '#1f2937',
+        borderRadius: 10,
+        padding: 4,
+        gap: 4,
+    },
+    difficultyButton: {
+        flex: 1,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    difficultyButtonEasy: {
+        backgroundColor: '#f97316',
+    },
+    difficultyButtonPro: {
+        backgroundColor: '#10b981',
+    },
+    difficultyText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#9ca3af',
+    },
+    difficultyTextActive: {
+        color: '#fff',
+    },
+    difficultySub: {
+        fontSize: 10,
+        color: 'rgba(255,255,255,0.7)',
+        marginTop: 2,
     },
     newGameButton: {
         backgroundColor: '#059669',
         paddingHorizontal: 32,
         paddingVertical: 16,
-        borderRadius: 16,
-        marginBottom: 16,
-        elevation: 4,
+        borderRadius: 14,
+        marginBottom: 24,
         shadowColor: '#059669',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
+        elevation: 6,
     },
     newGameButtonText: {
         color: '#fff',
@@ -124,10 +207,11 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     description: {
-        fontSize: 13,
+        fontSize: 14,
         color: '#6b7280',
         textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: 22,
+        maxWidth: 320,
         marginBottom: 32,
     },
     statsRow: {
@@ -136,10 +220,10 @@ const styles = StyleSheet.create({
     },
     statCard: {
         backgroundColor: '#1f2937',
-        borderRadius: 12,
+        borderRadius: 10,
         padding: 16,
         alignItems: 'center',
-        minWidth: 80,
+        flex: 1,
     },
     statValue: {
         fontSize: 22,

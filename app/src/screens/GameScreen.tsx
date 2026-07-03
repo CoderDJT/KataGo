@@ -4,16 +4,19 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Board } from '../components/Board';
 import { useGame } from '../hooks/useGame';
 import { GameStatus, StoneColor } from '../types/game';
+import { useLanguage } from '../i18n/LanguageContext';
 
 type RootStackParamList = {
     Home: undefined;
-    Game: { gameId: string };
+    Game: { gameId: string; difficulty: string };
 };
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Game'>;
 
 export const GameScreen: React.FC<Props> = ({ route, navigation }) => {
-    const { gameId } = route.params;
+    const { gameId, difficulty } = route.params;
+    const { t } = useLanguage();
+    const useKataGo = difficulty === 'pro';
     const {
         gameState,
         connected,
@@ -22,7 +25,7 @@ export const GameScreen: React.FC<Props> = ({ route, navigation }) => {
         sendUndo,
         sendResign,
         newGame,
-    } = useGame(gameId === 'new' ? undefined : gameId);
+    } = useGame(gameId === 'new' ? undefined : gameId, useKataGo);
 
     const handleCellClick = (position: { x: number; y: number }) => {
         if (!gameState) return;
@@ -34,24 +37,35 @@ export const GameScreen: React.FC<Props> = ({ route, navigation }) => {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#34d399" />
-                <Text style={styles.loadingText}>Connecting to server...</Text>
+                <Text style={styles.loadingText}>{t.connecting}</Text>
             </View>
         );
     }
 
     const isPlaying = gameState.status === GameStatus.Playing;
     const isPlayerTurn = gameState.currentTurn === StoneColor.Black;
+    const isKataGo = gameState.players.white.name === 'KataGo';
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                    <Text style={styles.backText}>← Back</Text>
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('Home')}
+                    style={styles.homeButton}
+                    activeOpacity={0.8}
+                >
+                    <Text style={styles.homeButtonText}>🏠 {t.backToHome}</Text>
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>KataGo</Text>
-                <View style={styles.connectionDot}>
-                    <View style={[styles.dot, connected ? styles.dotConnected : styles.dotDisconnected]} />
-                    <Text style={styles.connectionText}>{connected ? 'Connected' : 'Disconnected'}</Text>
+                <View style={styles.headerRight}>
+                    <Text style={styles.gameIdText}>
+                        {t.game} #{gameState.id.slice(0, 8)}
+                    </Text>
+                    <View style={styles.connectionDot}>
+                        <View style={[styles.dot, connected ? styles.dotConnected : styles.dotDisconnected]} />
+                        <Text style={styles.connectionText}>
+                            {connected ? t.connected : t.disconnected}
+                        </Text>
+                    </View>
                 </View>
             </View>
 
@@ -71,27 +85,35 @@ export const GameScreen: React.FC<Props> = ({ route, navigation }) => {
                             <View style={[styles.stone, styles.blackStone]} />
                             <Text style={styles.playerName}>{gameState.players.black.name}</Text>
                         </View>
-                        <Text style={styles.captures}>Captures: {gameState.board.capturedWhite}</Text>
+                        <Text style={styles.captures}>
+                            {t.captures}: {gameState.board.capturedWhite}
+                        </Text>
                     </View>
 
                     <View style={styles.playerRow}>
                         <View style={styles.playerInfo}>
                             <View style={[styles.stone, styles.whiteStone]} />
-                            <Text style={styles.playerName}>{gameState.players.white.name}</Text>
+                            <Text style={[styles.playerName, isKataGo ? styles.kataGoName : styles.simpleAIName]}>
+                                {gameState.players.white.name}
+                            </Text>
                         </View>
-                        <Text style={styles.captures}>Captures: {gameState.board.capturedBlack}</Text>
+                        <Text style={styles.captures}>
+                            {t.captures}: {gameState.board.capturedBlack}
+                        </Text>
                     </View>
 
                     <View style={styles.turnInfo}>
                         <Text style={styles.turnLabel}>
-                            Turn: {gameState.currentTurn === StoneColor.Black ? '● Black' : '○ White'}
+                            {t.turn}: {gameState.currentTurn === StoneColor.Black ? `● ${t.black}` : `○ ${t.white}`}
                         </Text>
-                        <Text style={styles.moveCount}>Move {gameState.board.moveHistory.length}</Text>
+                        <Text style={styles.moveCount}>
+                            {t.move} {gameState.board.moveHistory.length}
+                        </Text>
                     </View>
 
                     {gameState.status === GameStatus.Finished && (
                         <View style={styles.gameOver}>
-                            <Text style={styles.gameOverText}>Game Over</Text>
+                            <Text style={styles.gameOverText}>{t.gameOver}</Text>
                         </View>
                     )}
 
@@ -102,7 +124,7 @@ export const GameScreen: React.FC<Props> = ({ route, navigation }) => {
                             disabled={!isPlaying || !isPlayerTurn}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.actionText}>Pass</Text>
+                            <Text style={styles.actionText}>{t.pass}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -111,7 +133,7 @@ export const GameScreen: React.FC<Props> = ({ route, navigation }) => {
                             disabled={!isPlaying || gameState.board.moveHistory.length < 2}
                             activeOpacity={0.7}
                         >
-                            <Text style={styles.actionText}>Undo</Text>
+                            <Text style={styles.actionText}>{t.undo}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -120,12 +142,12 @@ export const GameScreen: React.FC<Props> = ({ route, navigation }) => {
                             disabled={!isPlaying}
                             activeOpacity={0.7}
                         >
-                            <Text style={[styles.actionText, styles.resignText]}>Resign</Text>
+                            <Text style={[styles.actionText, styles.resignText]}>{t.resign}</Text>
                         </TouchableOpacity>
                     </View>
 
                     <TouchableOpacity style={styles.newGameButton} onPress={newGame} activeOpacity={0.8}>
-                        <Text style={styles.newGameText}>New Game</Text>
+                        <Text style={styles.newGameText}>{t.newGame}</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>
@@ -153,25 +175,36 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
         backgroundColor: '#1f2937',
         borderBottomWidth: 1,
         borderBottomColor: '#374151',
     },
-    backButton: {
-        paddingVertical: 4,
-        paddingRight: 8,
+    homeButton: {
+        backgroundColor: '#d97706',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 8,
+        shadowColor: '#d97706',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
     },
-    backText: {
-        color: '#34d399',
-        fontSize: 16,
-        fontWeight: '500',
-    },
-    headerTitle: {
+    homeButtonText: {
         color: '#fff',
-        fontSize: 18,
-        fontWeight: '700',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    gameIdText: {
+        color: '#6b7280',
+        fontSize: 12,
     },
     connectionDot: {
         flexDirection: 'row',
@@ -202,86 +235,95 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     infoPanel: {
+        backgroundColor: '#1f2937',
+        borderRadius: 14,
+        padding: 16,
         width: '100%',
         maxWidth: 400,
-        backgroundColor: '#1f2937',
-        borderRadius: 16,
-        padding: 20,
     },
     playerRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        paddingVertical: 8,
     },
     playerInfo: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 10,
     },
     stone: {
-        width: 16,
-        height: 16,
-        borderRadius: 8,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
     },
     blackStone: {
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#1a1a2e',
         borderWidth: 1,
-        borderColor: '#555',
+        borderColor: '#4b5563',
     },
     whiteStone: {
         backgroundColor: '#f3f4f6',
         borderWidth: 1,
-        borderColor: '#d1d5db',
+        borderColor: '#9ca3af',
     },
     playerName: {
-        color: '#f3f4f6',
+        color: '#e5e7eb',
         fontSize: 14,
         fontWeight: '500',
     },
+    kataGoName: {
+        color: '#34d399',
+        fontWeight: '700',
+    },
+    simpleAIName: {
+        color: '#f97316',
+        fontWeight: '700',
+    },
     captures: {
-        color: '#9ca3af',
+        color: '#6b7280',
         fontSize: 12,
     },
     turnInfo: {
         borderTopWidth: 1,
         borderTopColor: '#374151',
         paddingTop: 12,
-        marginBottom: 12,
+        marginTop: 8,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     turnLabel: {
-        color: '#f3f4f6',
+        color: '#9ca3af',
         fontSize: 14,
-        fontWeight: '600',
     },
     moveCount: {
         color: '#6b7280',
         fontSize: 12,
-        marginTop: 4,
     },
     gameOver: {
-        backgroundColor: 'rgba(251, 191, 36, 0.15)',
+        backgroundColor: 'rgba(250, 204, 21, 0.15)',
         borderWidth: 1,
-        borderColor: '#f59e0b',
-        borderRadius: 8,
+        borderColor: '#ca8a04',
+        borderRadius: 10,
         padding: 12,
+        marginTop: 12,
         alignItems: 'center',
-        marginBottom: 12,
     },
     gameOverText: {
-        color: '#fbbf24',
+        color: '#facc15',
+        fontSize: 16,
         fontWeight: '700',
-        fontSize: 14,
     },
     actions: {
         flexDirection: 'row',
         gap: 8,
-        marginBottom: 12,
+        marginTop: 16,
     },
     actionButton: {
         flex: 1,
         backgroundColor: '#374151',
-        paddingVertical: 10,
+        paddingVertical: 12,
         borderRadius: 10,
         alignItems: 'center',
     },
@@ -289,25 +331,26 @@ const styles = StyleSheet.create({
         opacity: 0.4,
     },
     actionText: {
-        color: '#f3f4f6',
-        fontSize: 13,
+        color: '#e5e7eb',
+        fontSize: 14,
         fontWeight: '500',
     },
     resignButton: {
-        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+        backgroundColor: 'rgba(239, 68, 68, 0.25)',
     },
     resignText: {
         color: '#fca5a5',
     },
     newGameButton: {
         backgroundColor: '#059669',
-        paddingVertical: 12,
+        paddingVertical: 14,
         borderRadius: 12,
         alignItems: 'center',
+        marginTop: 16,
     },
     newGameText: {
         color: '#fff',
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '600',
     },
 });

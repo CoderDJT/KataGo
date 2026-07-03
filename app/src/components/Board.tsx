@@ -1,5 +1,5 @@
-import React, { useMemo, useCallback } from 'react';
-import { View, StyleSheet, Pressable, Dimensions } from 'react-native';
+import React, { useMemo, useCallback, useRef } from 'react';
+import { View, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Line, Circle, Rect, RadialGradient, Defs, Stop, G } from 'react-native-svg';
 import { StoneColor, Position, BoardState } from '../types/game';
 
@@ -26,20 +26,33 @@ export const Board: React.FC<BoardProps> = React.memo(({ board, onCellClick, int
     const stoneRadius = cellSize * 0.44;
     const starPoints = useMemo(() => STAR_POINTS[size] || [], [size]);
 
-    const handlePress = useCallback((evt: any) => {
+    const boardRef = useRef<View>(null);
+
+    const handleTouchEnd = useCallback((evt: any) => {
         if (!interactive) return;
-        const { locationX, locationY } = evt.nativeEvent;
-        const x = Math.round((locationX - PADDING) / cellSize);
-        const y = Math.round((locationY - PADDING) / cellSize);
-        if (x >= 0 && x < size && y >= 0 && y < size) {
-            onCellClick({ x, y });
-        }
+        boardRef.current?.measure((_x: number, _y: number, _w: number, _h: number, pageX: number, pageY: number) => {
+            const touchX = evt.nativeEvent.pageX - pageX;
+            const touchY = evt.nativeEvent.pageY - pageY;
+            const x = Math.round((touchX - PADDING) / cellSize);
+            const y = Math.round((touchY - PADDING) / cellSize);
+            if (x >= 0 && x < size && y >= 0 && y < size) {
+                onCellClick({ x, y });
+            }
+        });
     }, [interactive, cellSize, size, onCellClick]);
 
     return (
-        <View style={styles.container}>
-            <Pressable onPress={handlePress}>
-                <Svg width={BOARD_SIZE} height={BOARD_SIZE} viewBox={`0 0 ${BOARD_SIZE} ${BOARD_SIZE}`}>
+        <View
+            ref={boardRef}
+            style={styles.container}
+            onTouchEnd={handleTouchEnd}
+        >
+            <View pointerEvents="none">
+                <Svg
+                    width={BOARD_SIZE}
+                    height={BOARD_SIZE}
+                    viewBox={`0 0 ${BOARD_SIZE} ${BOARD_SIZE}`}
+                >
                     <Defs>
                         <RadialGradient id="blackGrad" cx="40%" cy="35%">
                             <Stop offset="0%" stopColor="#555" />
@@ -126,7 +139,7 @@ export const Board: React.FC<BoardProps> = React.memo(({ board, onCellClick, int
                         />
                     )}
                 </Svg>
-            </Pressable>
+            </View>
         </View>
     );
 });

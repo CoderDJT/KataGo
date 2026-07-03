@@ -3,12 +3,14 @@ import { GameState, GameMessage, Position } from '../types/game';
 
 const WS_URL = 'ws://localhost:3001/ws';
 
-export function useGame(gameId?: string) {
+export function useGame(gameId?: string, useKataGo?: boolean) {
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+    const useKataGoRef = useRef(useKataGo);
+    useKataGoRef.current = useKataGo;
 
     const connect = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -21,7 +23,7 @@ export function useGame(gameId?: string) {
             setError(null);
             ws.send(JSON.stringify({
                 type: 'join',
-                payload: { gameId: gameId || undefined },
+                payload: { gameId: gameId || undefined, useKataGo: useKataGoRef.current },
             }));
         };
 
@@ -82,7 +84,7 @@ export function useGame(gameId?: string) {
 
     const newGame = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'new_game', payload: {} }));
+            wsRef.current.send(JSON.stringify({ type: 'new_game', payload: { useKataGo: useKataGoRef.current } }));
         }
     }, []);
 
