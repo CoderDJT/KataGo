@@ -1,5 +1,5 @@
 import React from 'react';
-import { GameState, GameStatus, StoneColor } from '../types/game';
+import { GameState, GameStatus, StoneColor, AnalysisData } from '../types/game';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface GameInfoProps {
@@ -8,7 +8,12 @@ interface GameInfoProps {
     onUndo: () => void;
     onResign: () => void;
     onNewGame: () => void;
+    onAnalyze: () => void;
+    analysisResult: AnalysisData | null;
+    analyzing: boolean;
+    analysisError: string | null;
     connected: boolean;
+    isHumanVsHuman?: boolean;
 }
 
 export const GameInfo: React.FC<GameInfoProps> = ({
@@ -17,12 +22,25 @@ export const GameInfo: React.FC<GameInfoProps> = ({
     onUndo,
     onResign,
     onNewGame,
+    onAnalyze,
+    analysisResult,
+    analyzing,
+    analysisError,
     connected,
+    isHumanVsHuman,
 }) => {
     const { t } = useLanguage();
-    const { board, status, players, currentTurn } = gameState;
+    const { board, status, players, currentTurn, playerColor } = gameState;
     const isPlaying = status === GameStatus.Playing;
-    const isPlayerTurn = currentTurn === StoneColor.Black;
+    const isOnline = !!playerColor && players.white.isAI === false && players.black.isAI === false;
+    const isPlayerTurn = isOnline
+        ? (playerColor === currentTurn)
+        : isHumanVsHuman
+            ? true
+            : currentTurn === StoneColor.Black;
+
+    const blackName = players.black.name === 'Black' ? t.black : players.black.name;
+    const whiteName = players.white.name === 'White' ? t.white : players.white.name;
 
     return (
         <div className="bg-gray-800 rounded-xl p-5 space-y-4 w-full max-w-[280px]">
@@ -37,7 +55,7 @@ export const GameInfo: React.FC<GameInfoProps> = ({
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded-full bg-gray-900 border border-gray-600" />
-                        <span className="text-sm font-medium">{players.black.name}</span>
+                        <span className="text-sm font-medium">{blackName}</span>
                     </div>
                     <span className="text-xs text-gray-400">
                         {t.captures}: {board.capturedWhite}
@@ -47,7 +65,9 @@ export const GameInfo: React.FC<GameInfoProps> = ({
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded-full bg-white border border-gray-400" />
-                        {players.white.name === 'KataGo' ? (
+                        {isHumanVsHuman || isOnline ? (
+                            <span className="text-sm font-medium">{whiteName}</span>
+                        ) : players.white.name === 'KataGo' ? (
                             <span className="text-sm font-semibold text-emerald-400">{players.white.name}</span>
                         ) : (
                             <span className="text-sm font-medium text-orange-400">{players.white.name}</span>
@@ -60,6 +80,14 @@ export const GameInfo: React.FC<GameInfoProps> = ({
             </div>
 
             <div className="border-t border-gray-700 pt-3">
+                {isOnline && (
+                    <div className="text-sm text-gray-400 mb-1">
+                        {t.youAre}: {' '}
+                        <span className="font-bold text-white">
+                            {playerColor === StoneColor.Black ? `● ${t.black}` : `○ ${t.white}`}
+                        </span>
+                    </div>
+                )}
                 <div className="text-sm text-gray-400">
                     {t.turn}: {' '}
                     <span className="font-bold text-white">
@@ -88,7 +116,7 @@ export const GameInfo: React.FC<GameInfoProps> = ({
 
                 <button
                     onClick={onUndo}
-                    disabled={!isPlaying || board.moveHistory.length < 2}
+                    disabled={!isPlaying || board.moveHistory.length < (isOnline || isHumanVsHuman ? 1 : 2) || (isOnline && !isPlayerTurn)}
                     className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
                 >
                     {t.undo}
@@ -101,6 +129,58 @@ export const GameInfo: React.FC<GameInfoProps> = ({
                 >
                     {t.resign}
                 </button>
+
+                {isOnline && status === GameStatus.Finished && (
+                    <div className="border-t border-gray-700 pt-2 space-y-2">
+                        <button
+                            onClick={onAnalyze}
+                            disabled={analyzing || !!analysisResult}
+                            className="w-full px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+                        >
+                            {analyzing ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    <span className="animate-spin w-3 h-3 border-2 border-purple-300 border-t-transparent rounded-full" />
+                                    {t.analyzing}
+                                </span>
+                            ) : analysisResult ? (
+                                t.analysisDone
+                            ) : (
+                                t.analyzeGame
+                            )}
+                        </button>
+
+                        {analysisError && (
+                            <div className="bg-red-900/30 border border-red-700 rounded-lg p-2 text-sm text-red-300 text-center">
+                                {analysisError}
+                            </div>
+                        )}
+
+                        {analysisResult && (
+                            <div className="bg-gray-900 rounded-lg p-3 space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-400">{t.finalScore}:</span>
+                                    <span className="text-white font-bold">{analysisResult.finalScore}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-400">{t.winRate}:</span>
+                                    <span className="text-white font-bold">
+                                        {(analysisResult.winRate * 100).toFixed(1)}%
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-400">{t.scoreLead}:</span>
+                                    <span className="text-white font-bold">{analysisResult.scoreLead.toFixed(1)}</span>
+                                </div>
+                                {analysisResult.principalVariation && (
+                                    <div>
+                                        <span className="text-gray-400">{t.principalVariation}:</span>
+                                        <p className="text-white mt-1">{analysisResult.principalVariation}</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="border-t border-gray-700 pt-2">
                     <button

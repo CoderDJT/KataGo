@@ -7,6 +7,7 @@ export class KataGoEngine {
     private responseResolvers: Map<string, (response: string) => void> = new Map();
     private commandId = 0;
     private ready = false;
+    private pendingResponse: { id: string; lines: string[] } | null = null;
 
     constructor(private katagoPath: string, private configPath: string, private modelPath: string) { }
 
@@ -33,23 +34,44 @@ export class KataGoEngine {
 
             rl.on('line', (line: string) => {
                 line = line.trim();
-                if (!line) return;
+
+                if (line === '') {
+                    if (this.pendingResponse) {
+                        const { id, lines } = this.pendingResponse;
+                        this.pendingResponse = null;
+                        const resolver = this.responseResolvers.get(id);
+                        if (resolver) {
+                            this.responseResolvers.delete(id);
+                            resolver(lines.join('\n'));
+                        }
+                        if (this.commandQueue.length > 0) {
+                            const next = this.commandQueue.shift()!;
+                            this.process?.stdin?.write(next + '\n');
+                        }
+                    }
+                    return;
+                }
 
                 if (line.startsWith('=') || line.startsWith('?')) {
                     const parts = line.split(/(?<=\d)\s/);
                     const id = parts[0].slice(1);
                     const result = line.slice(id.length + 2);
 
-                    const resolver = this.responseResolvers.get(id);
-                    if (resolver) {
-                        this.responseResolvers.delete(id);
-                        resolver(result);
+                    if (result) {
+                        const resolver = this.responseResolvers.get(id);
+                        if (resolver) {
+                            this.responseResolvers.delete(id);
+                            resolver(result);
+                        }
+                        if (this.commandQueue.length > 0) {
+                            const next = this.commandQueue.shift()!;
+                            this.process?.stdin?.write(next + '\n');
+                        }
+                    } else {
+                        this.pendingResponse = { id, lines: [] };
                     }
-
-                    if (this.commandQueue.length > 0) {
-                        const next = this.commandQueue.shift()!;
-                        this.process?.stdin?.write(next + '\n');
-                    }
+                } else if (this.pendingResponse) {
+                    this.pendingResponse.lines.push(line);
                 }
             });
 
@@ -120,21 +142,32 @@ export class KataGoEngine {
         const result = await this.sendCommand(`kata-analyze ${turns}`);
 
         const info: Record<string, string> = {};
+        let pv = '';
+
         if (result) {
-            const parts = result.split(' ');
-            for (const part of parts) {
-                const [key, ...rest] = part.split('=');
-                if (key && rest.length > 0) {
-                    info[key] = rest.join('=');
+            const flatResult = result.replace(/\n/g, ' ');
+
+            const parts = flatResult.split(' pv ');
+            const infoPart = parts[0].replace(/^info\s*/, '');
+            const pvRaw = (parts[1] || '').trim();
+
+            const moveMatches = [...pvRaw.matchAll(/info move (\w+)/g)];
+            const moves = moveMatches.map(m => m[1]);
+            pv = moves.join(' ');
+
+            for (const token of infoPart.split(' ')) {
+                const eqIdx = token.indexOf('=');
+                if (eqIdx > 0) {
+                    info[token.slice(0, eqIdx)] = token.slice(eqIdx + 1);
                 }
             }
         }
 
         return {
-            winrate: parseFloat(info['info']?.match(/winrate=([\d.]+)/)?.[1] || '0.5'),
-            scoreLead: parseFloat(info['info']?.match(/scoreLead=([\d.]+)/)?.[1] || '0'),
+            winrate: parseFloat(info['winrate'] || '0.5'),
+            scoreLead: parseFloat(info['scoreLead'] || '0'),
             ownership: info['ownership'] || '',
-            pv: info['pv'] || '',
+            pv,
         };
     }
 

@@ -24,8 +24,9 @@ app.use(express.json());
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
-const games = new Map<string, { game: GoGame; engine: KataGoEngine | null }>();
+const games = new Map<string, { game: GoGame; engine: KataGoEngine | null; mode: string }>();
 const connections = new Map<string, Set<WebSocket>>();
+const playerColors = new Map<WebSocket, StoneColor>();
 
 let globalEngine: KataGoEngine | null = null;
 let engineReady = false;
@@ -56,26 +57,44 @@ const KATAGO_PATH = process.env.KATAGO_PATH || foundFiles?.path || '';
 const KATAGO_CONFIG = process.env.KATAGO_CONFIG || foundFiles?.cfg || '';
 const KATAGO_MODEL = process.env.KATAGO_MODEL || foundFiles?.model || '';
 
-function broadcast(gameId: string, message: GameMessage): void {
+const ANALYSIS_TIMEOUT = 10 * 60 * 1000;
+
+function parseOwnership(ownershipStr: string, size: number): number[][] {
+    const result: number[][] = [];
+    for (let y = 0; y < size; y++) {
+        result[y] = [];
+        for (let x = 0; x < size; x++) {
+            const ch = ownershipStr[y * size + x] || '.';
+            result[y][x] = ch === 'B' || ch === 'b' ? 1 : ch === 'W' || ch === 'w' ? -1 : 0;
+        }
+    }
+    return result;
+}
+
+function broadcast(gameId: string, game: GoGame, mode: string): void {
     const conns = connections.get(gameId);
     if (!conns) return;
-    const data = JSON.stringify(message);
     for (const ws of conns) {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(data);
-        }
+        if (ws.readyState !== WebSocket.OPEN) continue;
+        const state = gameStateToResponse(gameId, game, mode);
+        const color = playerColors.get(ws);
+        ws.send(JSON.stringify({
+            type: 'state',
+            payload: color ? { ...state, playerColor: color } : { ...state, playerColor: StoneColor.Black },
+        }));
     }
 }
 
-function gameStateToResponse(gameId: string, goGame: GoGame): GameState {
+function gameStateToResponse(gameId: string, goGame: GoGame, mode: string = 'ai'): GameState {
     const board = goGame.getBoardState();
+    const isHumanMode = mode === 'human' || mode === 'online';
     return {
         id: gameId,
         board,
         status: goGame.status,
         players: {
             black: { name: 'Black', isAI: false },
-            white: { name: engineReady ? 'KataGo' : 'Simple AI', isAI: true },
+            white: { name: isHumanMode ? 'White' : (engineReady ? 'KataGo' : 'Simple AI'), isAI: !isHumanMode },
         },
         currentTurn: board.currentTurn,
         lastMove: board.moveHistory.length > 0
@@ -103,10 +122,11 @@ function randomAI(game: GoGame): Position | null {
 
 async function handleAIResponse(
     gameId: string,
-    gameData: { game: GoGame; engine: KataGoEngine | null },
+    gameData: { game: GoGame; engine: KataGoEngine | null; mode: string },
 ): Promise<void> {
-    const { game, engine } = gameData;
+    const { game, engine, mode } = gameData;
 
+    if (mode === 'human' || mode === 'online') return;
     if (game.board.currentTurn !== StoneColor.White) return;
     if (game.status !== GameStatus.Playing) return;
 
@@ -133,10 +153,7 @@ async function handleAIResponse(
         fallbackRandomMove(gameId, game);
     }
 
-    broadcast(gameId, {
-        type: 'state',
-        payload: gameStateToResponse(gameId, game),
-    });
+    broadcast(gameId, game, mode);
 }
 
 function fallbackRandomMove(gameId: string, game: GoGame): void {
@@ -193,21 +210,59 @@ wss.on('connection', (ws: WebSocket) => {
 
             switch (msg.type) {
                 case 'join': {
-                    const { gameId, useKataGo } = msg.payload as {
+                    const { gameId, useKataGo, mode } = msg.payload as {
                         gameId?: string;
                         useKataGo?: boolean;
+                        mode?: string;
                     };
                     const id = gameId || uuidv4();
+                    const gameMode = mode || 'ai';
+
+                    if (gameMode === 'online') {
+                        if (!games.has(id)) {
+                            const goGame = new GoGame(BOARD_SIZE, DEFAULT_KOMI);
+                            goGame.status = GameStatus.Waiting;
+                            games.set(id, { game: goGame, engine: null, mode: gameMode });
+
+                            if (!connections.has(id)) {
+                                connections.set(id, new Set());
+                            }
+                            connections.get(id)!.add(ws);
+                            playerColors.set(ws, StoneColor.Black);
+                            currentGameId = id;
+
+                            console.log(`[Game ${id}] Online: Black joined, waiting for White`);
+                            broadcast(id, goGame, gameMode);
+                        } else {
+                            const conns = connections.get(id);
+                            if (!conns || conns.size >= 2) {
+                                ws.send(JSON.stringify({ type: 'error', payload: 'Game is full' }));
+                                break;
+                            }
+
+                            connections.get(id)!.add(ws);
+                            playerColors.set(ws, StoneColor.White);
+                            currentGameId = id;
+
+                            const gameData = games.get(id)!;
+                            gameData.game.status = GameStatus.Playing;
+                            console.log(`[Game ${id}] Online: White joined, game starting`);
+                            broadcast(id, gameData.game, gameMode);
+                        }
+                        break;
+                    }
 
                     if (!games.has(id)) {
                         const goGame = new GoGame(BOARD_SIZE, DEFAULT_KOMI);
-                        const engine = (useKataGo !== false && globalEngine && engineReady) ? globalEngine : null;
+                        const engine = (gameMode !== 'human' && useKataGo !== false && globalEngine && engineReady) ? globalEngine : null;
                         if (engine) {
                             console.log(`[Game ${id}] Using KataGo engine`);
+                        } else if (gameMode === 'human') {
+                            console.log(`[Game ${id}] Human vs Human mode`);
                         } else {
                             console.log(`[Game ${id}] Using simple random AI`);
                         }
-                        games.set(id, { game: goGame, engine });
+                        games.set(id, { game: goGame, engine, mode: gameMode });
 
                         if (engine) {
                             await syncEngineState(engine, goGame);
@@ -218,13 +273,11 @@ wss.on('connection', (ws: WebSocket) => {
                         connections.set(id, new Set());
                     }
                     connections.get(id)!.add(ws);
+                    playerColors.set(ws, StoneColor.Black);
                     currentGameId = id;
 
                     const gameData = games.get(id)!;
-                    broadcast(id, {
-                        type: 'state',
-                        payload: gameStateToResponse(id, gameData.game),
-                    });
+                    broadcast(id, gameData.game, gameData.mode);
                     break;
                 }
 
@@ -233,11 +286,20 @@ wss.on('connection', (ws: WebSocket) => {
                     const gameData = games.get(currentGameId);
                     if (!gameData) break;
 
-                    const { game, engine } = gameData;
+                    const { game, engine, mode } = gameData;
                     const { position } = msg.payload as { position: Position };
 
-                    if (game.board.currentTurn !== StoneColor.Black) break;
                     if (game.status !== GameStatus.Playing) break;
+
+                    if (mode === 'online') {
+                        const myColor = playerColors.get(ws);
+                        if (game.board.currentTurn !== myColor) {
+                            ws.send(JSON.stringify({ type: 'error', payload: 'Not your turn' }));
+                            break;
+                        }
+                    } else if (mode !== 'human' && game.board.currentTurn !== StoneColor.Black) {
+                        break;
+                    }
 
                     const move = game.makeMove(position);
                     if (!move) {
@@ -247,15 +309,12 @@ wss.on('connection', (ws: WebSocket) => {
 
                     if (engine && engine.isReady()) {
                         const vertex = game.toGTPVertex(position);
-                        engine.playMove('b', vertex).catch(err => {
+                        engine.playMove(move.color === StoneColor.Black ? 'b' : 'w', vertex).catch(err => {
                             console.error('KataGo play move error:', err);
                         });
                     }
 
-                    broadcast(currentGameId, {
-                        type: 'state',
-                        payload: gameStateToResponse(currentGameId, game),
-                    });
+                    broadcast(currentGameId, game, mode);
 
                     if (game.status === GameStatus.Playing) {
                         await handleAIResponse(currentGameId, gameData);
@@ -268,21 +327,26 @@ wss.on('connection', (ws: WebSocket) => {
                     const gameData = games.get(currentGameId);
                     if (!gameData) break;
 
-                    const { game, engine } = gameData;
+                    const { game, engine, mode } = gameData;
 
-                    if (game.board.currentTurn !== StoneColor.Black) break;
                     if (game.status !== GameStatus.Playing) break;
 
+                    if (mode === 'online') {
+                        const myColor = playerColors.get(ws);
+                        if (game.board.currentTurn !== myColor) {
+                            ws.send(JSON.stringify({ type: 'error', payload: 'Not your turn' }));
+                            break;
+                        }
+                    }
+
+                    const passColor = game.board.currentTurn;
                     game.pass();
 
                     if (engine && engine.isReady()) {
-                        engine.playMove('b', 'pass').catch(() => { });
+                        engine.playMove(passColor === StoneColor.Black ? 'b' : 'w', 'pass').catch(() => { });
                     }
 
-                    broadcast(currentGameId, {
-                        type: 'state',
-                        payload: gameStateToResponse(currentGameId, game),
-                    });
+                    broadcast(currentGameId, game, mode);
 
                     if (game.status === GameStatus.Playing) {
                         await handleAIResponse(currentGameId, gameData);
@@ -295,19 +359,21 @@ wss.on('connection', (ws: WebSocket) => {
                     const gameData = games.get(currentGameId);
                     if (!gameData) break;
 
-                    const { game, engine } = gameData;
-                    game.undo();
-                    game.undo();
+                    const { game, engine, mode } = gameData;
 
-                    if (engine && engine.isReady()) {
-                        engine.undo().catch(() => { });
-                        engine.undo().catch(() => { });
+                    if (mode === 'human' || mode === 'online') {
+                        game.undo();
+                    } else {
+                        game.undo();
+                        game.undo();
+
+                        if (engine && engine.isReady()) {
+                            engine.undo().catch(() => { });
+                            engine.undo().catch(() => { });
+                        }
                     }
 
-                    broadcast(currentGameId, {
-                        type: 'state',
-                        payload: gameStateToResponse(currentGameId, game),
-                    });
+                    broadcast(currentGameId, game, mode);
                     break;
                 }
 
@@ -317,10 +383,55 @@ wss.on('connection', (ws: WebSocket) => {
                     if (!gameData) break;
 
                     gameData.game.status = GameStatus.Finished;
-                    broadcast(currentGameId, {
-                        type: 'state',
-                        payload: gameStateToResponse(currentGameId, gameData.game),
-                    });
+                    broadcast(currentGameId, gameData.game, gameData.mode);
+                    break;
+                }
+
+                case 'analyze': {
+                    if (!currentGameId) break;
+                    const gameData = games.get(currentGameId);
+                    if (!gameData) break;
+
+                    const { game, mode } = gameData;
+                    if (!globalEngine || !engineReady) {
+                        ws.send(JSON.stringify({ type: 'error', payload: 'KataGo engine not available' }));
+                        break;
+                    }
+
+                    try {
+                        await syncEngineState(globalEngine, game);
+                        const score = await globalEngine.estimateScore();
+
+                        const analysisPromise = (async () => {
+                            const analysis = await globalEngine.getAnalysis();
+                            const ownership = parseOwnership(score.ownership, game.board.size);
+                            return { analysis, ownership };
+                        })();
+
+                        const timeoutPromise = new Promise<never>((_, reject) =>
+                            setTimeout(() => reject(new Error('ANALYSIS_TIMEOUT')), ANALYSIS_TIMEOUT)
+                        );
+
+                        const { analysis, ownership } = await Promise.race([analysisPromise, timeoutPromise]);
+
+                        ws.send(JSON.stringify({
+                            type: 'analysis',
+                            payload: {
+                                finalScore: score.score,
+                                winRate: analysis.winrate,
+                                scoreLead: analysis.scoreLead,
+                                ownership,
+                                principalVariation: analysis.pv,
+                            },
+                        }));
+                    } catch (err: any) {
+                        console.error('Analysis error:', err);
+                        if (err.message === 'ANALYSIS_TIMEOUT') {
+                            ws.send(JSON.stringify({ type: 'error', payload: 'analysis_timeout' }));
+                        } else {
+                            ws.send(JSON.stringify({ type: 'error', payload: 'Analysis failed' }));
+                        }
+                    }
                     break;
                 }
 
@@ -330,11 +441,12 @@ wss.on('connection', (ws: WebSocket) => {
                         if (oldConns) oldConns.delete(ws);
                     }
 
-                    const { useKataGo } = msg.payload as { useKataGo?: boolean };
+                    const { useKataGo, mode } = msg.payload as { useKataGo?: boolean; mode?: string };
                     const newId = uuidv4();
+                    const gameMode = mode || 'ai';
                     const goGame = new GoGame(BOARD_SIZE, DEFAULT_KOMI);
-                    const engine = (useKataGo !== false && globalEngine && engineReady) ? globalEngine : null;
-                    games.set(newId, { game: goGame, engine });
+                    const engine = (gameMode !== 'human' && gameMode !== 'online' && useKataGo !== false && globalEngine && engineReady) ? globalEngine : null;
+                    games.set(newId, { game: goGame, engine, mode: gameMode });
 
                     if (engine) {
                         await syncEngineState(engine, goGame);
@@ -344,12 +456,10 @@ wss.on('connection', (ws: WebSocket) => {
                         connections.set(newId, new Set());
                     }
                     connections.get(newId)!.add(ws);
+                    playerColors.set(ws, StoneColor.Black);
                     currentGameId = newId;
 
-                    broadcast(newId, {
-                        type: 'state',
-                        payload: gameStateToResponse(newId, goGame),
-                    });
+                    broadcast(newId, goGame, gameMode);
                     break;
                 }
             }
@@ -369,6 +479,7 @@ wss.on('connection', (ws: WebSocket) => {
                 }
             }
         }
+        playerColors.delete(ws);
     });
 });
 

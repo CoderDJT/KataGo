@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router';
 import { Board } from '../components/Board';
 import { GameInfo } from '../components/GameInfo';
@@ -11,8 +12,12 @@ export const GamePage: React.FC = () => {
     const { gameId } = useParams({ from: '/game/$gameId' }) as { gameId: string };
     const search = useSearch({ from: '/game/$gameId' });
     const useKataGo = search.difficulty !== 'easy';
+    const isHumanVsHuman = search.mode === 'human';
+    const isOnline = search.mode === 'online';
     const navigate = useNavigate();
     const { t } = useLanguage();
+    const [linkCopied, setLinkCopied] = useState(false);
+    const [qrCodeUrl, setQrCodeUrl] = useState('');
     const {
         gameState,
         connected,
@@ -21,13 +26,36 @@ export const GamePage: React.FC = () => {
         sendUndo,
         sendResign,
         newGame,
-    } = useGame(gameId === 'new' ? undefined : gameId, useKataGo);
+        sendAnalyze,
+        analysisResult,
+        analyzing,
+        error,
+    } = useGame(gameId === 'new' ? undefined : gameId, useKataGo, search.mode);
 
     const handleCellClick = (position: { x: number; y: number }) => {
         if (!gameState) return;
         if (gameState.status !== GameStatus.Playing) return;
         sendMove(position);
     };
+
+    const copyGameLink = useCallback(() => {
+        const url = `${window.location.origin}/game/${gameState?.id}?mode=online`;
+        navigator.clipboard.writeText(url).then(() => {
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        });
+    }, [gameState?.id]);
+
+    useEffect(() => {
+        if (isOnline && gameState?.id) {
+            const gameUrl = `${window.location.origin}/game/${gameState.id}?mode=online`;
+            QRCode.toDataURL(gameUrl, { width: 180, margin: 1 })
+                .then(setQrCodeUrl)
+                .catch(() => setQrCodeUrl(''));
+        }
+    }, [isOnline, gameState?.id]);
+
+    const analysisError = error === 'analysis_timeout' ? t.analysisTimeout : error;
 
     if (!gameState) {
         return (
@@ -62,6 +90,41 @@ export const GamePage: React.FC = () => {
                 </div>
             </header>
 
+            {isOnline && gameState.status === GameStatus.Waiting && (
+                <div className="w-full max-w-[900px] mb-4">
+                    <div className="bg-purple-900/40 border border-purple-700 rounded-xl p-5 text-center space-y-3">
+                        <div className="flex items-center justify-center gap-2">
+                            <div className="animate-spin w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full" />
+                            <span className="text-purple-300 font-medium">{t.waitingOpponent}</span>
+                        </div>
+                        <p className="text-sm text-gray-400">{t.shareLink}</p>
+                        {qrCodeUrl && (
+                            <div className="flex justify-center">
+                                <img
+                                    src={qrCodeUrl}
+                                    alt="QR Code"
+                                    className="w-44 h-44 rounded-lg bg-white p-2"
+                                />
+                            </div>
+                        )}
+                        <div className="flex items-center gap-2 bg-gray-900 rounded-lg p-2">
+                            <input
+                                type="text"
+                                readOnly
+                                value={`${window.location.origin}/game/${gameState.id}?mode=online`}
+                                className="flex-1 bg-transparent text-sm text-gray-300 outline-none px-2"
+                            />
+                            <button
+                                onClick={copyGameLink}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+                            >
+                                {linkCopied ? t.linkCopied : t.copyLink}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="flex flex-col lg:flex-row gap-6 items-start justify-center w-full max-w-[900px]">
                 <div className="w-full lg:flex-1 flex justify-center">
                     <Board
@@ -79,14 +142,19 @@ export const GamePage: React.FC = () => {
                         onUndo={sendUndo}
                         onResign={sendResign}
                         onNewGame={newGame}
+                        onAnalyze={sendAnalyze}
+                        analysisResult={analysisResult}
+                        analyzing={analyzing}
+                        analysisError={analysisError}
                         connected={connected}
+                        isHumanVsHuman={isHumanVsHuman}
                     />
                 </div>
             </div>
 
             <div className="w-full max-w-[900px] mt-4 text-center">
                 <p className="text-xs text-gray-600">
-                    {t.gameHint}
+                    {isOnline ? t.gameHintOnline : isHumanVsHuman ? t.gameHintVsHuman : t.gameHint}
                 </p>
             </div>
         </div>

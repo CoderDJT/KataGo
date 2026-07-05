@@ -21,6 +21,7 @@ const gameRoute = createRoute({
     path: '/game/$gameId',
     validateSearch: (search: Record<string, unknown>) => ({
         difficulty: (search.difficulty as string) || 'pro',
+        mode: (search.mode as string) || 'ai',
     }),
     component: GamePage,
 });

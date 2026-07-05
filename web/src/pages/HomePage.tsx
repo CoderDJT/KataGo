@@ -12,7 +12,23 @@ export const HomePage: React.FC = () => {
         navigate({
             to: '/game/$gameId',
             params: { gameId: 'new' },
-            search: { difficulty },
+            search: { difficulty, mode: 'ai' },
+        });
+    };
+
+    const handleHumanVsHuman = () => {
+        navigate({
+            to: '/game/$gameId',
+            params: { gameId: 'new' },
+            search: { difficulty: 'easy', mode: 'human' },
+        });
+    };
+
+    const handleOnlineMatch = () => {
+        navigate({
+            to: '/game/$gameId',
+            params: { gameId: 'new' },
+            search: { difficulty: 'easy', mode: 'online' },
         });
     };
 
@@ -55,8 +71,8 @@ export const HomePage: React.FC = () => {
                             <button
                                 onClick={() => setDifficulty('easy')}
                                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${difficulty === 'easy'
-                                        ? 'bg-orange-500 text-white shadow-md'
-                                        : 'text-gray-400 hover:text-gray-200'
+                                    ? 'bg-orange-500 text-white shadow-md'
+                                    : 'text-gray-400 hover:text-gray-200'
                                     }`}
                             >
                                 {t.easy}
@@ -65,8 +81,8 @@ export const HomePage: React.FC = () => {
                             <button
                                 onClick={() => setDifficulty('pro')}
                                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${difficulty === 'pro'
-                                        ? 'bg-emerald-500 text-white shadow-md'
-                                        : 'text-gray-400 hover:text-gray-200'
+                                    ? 'bg-emerald-500 text-white shadow-md'
+                                    : 'text-gray-400 hover:text-gray-200'
                                     }`}
                             >
                                 {t.professional}
@@ -75,11 +91,27 @@ export const HomePage: React.FC = () => {
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            onClick={handleNewGame}
+                            className="px-6 py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-emerald-900/30"
+                        >
+                            {t.newGameVsAI}
+                        </button>
+
+                        <button
+                            onClick={handleHumanVsHuman}
+                            className="px-6 py-4 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-900/30"
+                        >
+                            {t.newGameVsHuman}
+                        </button>
+                    </div>
+
                     <button
-                        onClick={handleNewGame}
-                        className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-lg font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-emerald-900/30"
+                        onClick={handleOnlineMatch}
+                        className="w-full px-6 py-4 bg-purple-600 hover:bg-purple-500 rounded-xl text-sm font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-purple-900/30"
                     >
-                        {t.newGameVsAI}
+                        {t.newGameOnline}
                     </button>
 
                     <p className="text-sm text-gray-500 max-w-md whitespace-pre-line">

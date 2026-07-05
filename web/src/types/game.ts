@@ -49,6 +49,7 @@ export interface GameState {
     currentTurn: StoneColor;
     lastMove: Position | null;
     score: Score | null;
+    playerColor?: StoneColor;
 }
 
 export interface PlayerInfo {
@@ -64,6 +65,14 @@ export interface Score {
 }
 
 export interface GameMessage {
-    type: 'move' | 'pass' | 'resign' | 'undo' | 'analysis' | 'state' | 'error' | 'join' | 'new_game';
+    type: 'move' | 'pass' | 'resign' | 'undo' | 'analyze' | 'analysis' | 'state' | 'error' | 'join' | 'new_game';
     payload: unknown;
+}
+
+export interface AnalysisData {
+    finalScore: string;
+    winRate: number;
+    scoreLead: number;
+    ownership: number[][];
+    principalVariation: string;
 }
