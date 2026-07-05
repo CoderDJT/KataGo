@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
@@ -36,20 +37,34 @@ function findKataGoFiles(): { path: string; cfg: string; model: string } | null 
     const __dirname = path.dirname(__filename);
     const root = path.resolve(__dirname, '..');
 
-    const exe = fs.existsSync(path.join(root, 'katago.exe')) ? path.join(root, 'katago.exe') : null;
-    if (!exe) return null;
-
     const cfg = fs.existsSync(path.join(root, 'default_gtp.cfg')) ? path.join(root, 'default_gtp.cfg') : null;
     if (!cfg) return null;
 
     const binFiles = fs.readdirSync(root).filter((f: string) => f.endsWith('.bin.gz'));
     if (binFiles.length === 0) return null;
 
-    return {
-        path: exe,
-        cfg,
-        model: path.join(root, binFiles[0]),
-    };
+    const model = path.join(root, binFiles[0]);
+
+    const exeNames = process.platform === 'win32' ? ['katago.exe'] : ['katago', 'katago.exe'];
+    let exe: string | null = null;
+    for (const name of exeNames) {
+        const candidate = path.join(root, name);
+        if (fs.existsSync(candidate)) {
+            exe = candidate;
+            break;
+        }
+    }
+
+    if (!exe) {
+        try {
+            exe = execSync('which katago', { encoding: 'utf-8' }).trim();
+            if (!exe) return null;
+        } catch {
+            return null;
+        }
+    }
+
+    return { path: exe, cfg, model };
 }
 
 const foundFiles = findKataGoFiles();

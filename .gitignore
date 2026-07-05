@@ -43,3 +43,5 @@ Desktop.ini
 *.tmp
 *.bak
 *.gz
+*.DS_Store
+*.exe
