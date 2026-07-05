@@ -1,6 +1,6 @@
 # KataGo AI 围棋对弈
 
-基于 KataGo 引擎的 Web 围棋对弈平台，支持 AI 对战、本地双人对弈、在线联机对战，并提供 AI 终局分析功能。
+基于 KataGo 引擎的围棋对弈平台，支持 Web 端和移动 App 端，提供 AI 对战、本地双人对弈、在线联机对战，并支持 AI 终局分析功能。
 
 ## 技术栈
 
@@ -14,6 +14,18 @@
 | TailwindCSS | ^3.4.1 | 样式框架 |
 | TanStack Router | ^1.15.0 | 前端路由 |
 | TanStack React Query | ^5.17.0 | 数据请求管理 |
+
+### 移动端 (app/)
+
+| 技术 | 版本 | 用途 |
+|---|---|---|
+| Expo | ~56.0.0 | 跨平台移动开发框架 |
+| React Native | ~0.85.0 | 原生 UI 框架 |
+| React Navigation | ^7.0.0 | 导航路由 |
+| react-native-svg | * | SVG 棋盘渲染 |
+| react-native-gesture-handler | ~2.26.0 | 手势处理 |
+| react-native-reanimated | ~3.18.0 | 动画引擎 |
+| qrcode | ^1.5.4 | 二维码本地生成 |
 
 ### 后端 (server/)
 
@@ -69,6 +81,22 @@ katago/
 │   │   └── index.css              # TailwindCSS 全局样式
 │   ├── vite.config.ts             # Vite 配置
 │   └── package.json
+├── app/                           # 移动端应用（Expo/React Native）
+│   ├── src/
+│   │   ├── screens/
+│   │   │   ├── HomeScreen.tsx     # 首页（模式选择）
+│   │   │   └── GameScreen.tsx     # 对弈页面
+│   │   ├── components/
+│   │   │   └── Board.tsx          # 棋盘组件（SVG 渲染 + PanResponder 手势）
+│   │   ├── hooks/
+│   │   │   └── useGame.ts         # WebSocket 游戏连接 Hook
+│   │   ├── i18n/
+│   │   │   ├── LanguageContext.tsx # 国际化上下文
+│   │   │   └── translations.ts    # 翻译文件
+│   │   └── types/
+│   │       └── game.ts            # 类型定义
+│   ├── App.tsx                    # 应用入口 + 导航配置
+│   └── package.json
 ├── shared/                        # 前后端共享代码
 │   ├── types/
 │   │   └── game.ts                # 共享类型（StoneColor, Position 等）
@@ -80,7 +108,7 @@ katago/
 ## 通信架构
 
 ```
-浏览器 (React)                    Node.js 服务端                    KataGo
+浏览器/App (React/RN)              Node.js 服务端                    KataGo
      │                                │                               │
      │  ws://localhost:3001/ws        │                               │
      │ ◄══════════════════════════════►                               │
@@ -125,6 +153,10 @@ cd katago
 cd web
 npm install
 
+# 安装移动端依赖
+cd ../app
+npm install --legacy-peer-deps
+
 # 安装后端依赖
 cd ../server
 npm install
@@ -162,6 +194,18 @@ npm run dev
 - 开发服务器：`http://localhost:5173`
 - Vite 已配置将 `/ws` 代理到后端，局域网设备可通过 PC 的 IP 访问
 
+### 启动移动端
+
+```bash
+cd app
+npx expo start
+```
+
+启动后：
+- 终端显示二维码，使用 **Expo Go** App 扫码连接
+- 手机和 PC 需在同一局域网，WebSocket 连接到 `localhost:3001`
+- 如需真机测试，确保手机能访问 PC 的 `3001` 端口
+
 ### 同时启动
 
 ```bash
@@ -170,6 +214,9 @@ cd server && npm run dev
 
 # 终端 2：前端
 cd web && npm run dev
+
+# 终端 3：移动端（可选）
+cd app && npx expo start
 ```
 
 浏览器访问 `http://localhost:5173` 即可开始对弈。
