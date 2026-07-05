@@ -1,5 +1,5 @@
-import React, { useMemo, useCallback, useRef } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import React, { useMemo, useCallback } from 'react';
+import { View, StyleSheet, Dimensions, PanResponder } from 'react-native';
 import Svg, { Line, Circle, Rect, RadialGradient, Defs, Stop, G } from 'react-native-svg';
 import { StoneColor, Position, BoardState } from '../types/game';
 
@@ -18,7 +18,7 @@ const STAR_POINTS: Record<number, [number, number][]> = {
 
 const { width: screenWidth } = Dimensions.get('window');
 const BOARD_SIZE = Math.min(screenWidth - 32, 400);
-const PADDING = 16;
+const PADDING = 20;
 
 export const Board: React.FC<BoardProps> = React.memo(({ board, onCellClick, interactive, lastMove }) => {
     const { size, grid, koPoint } = board;
@@ -26,120 +26,116 @@ export const Board: React.FC<BoardProps> = React.memo(({ board, onCellClick, int
     const stoneRadius = cellSize * 0.44;
     const starPoints = useMemo(() => STAR_POINTS[size] || [], [size]);
 
-    const boardRef = useRef<View>(null);
+    const handleCellClick = useCallback((evt: any) => {
+        const { locationX, locationY } = evt.nativeEvent;
+        const x = Math.round((locationX - PADDING) / cellSize);
+        const y = Math.round((locationY - PADDING) / cellSize);
+        if (x >= 0 && x < size && y >= 0 && y < size) {
+            onCellClick({ x, y });
+        }
+    }, [cellSize, size, onCellClick]);
 
-    const handleTouchEnd = useCallback((evt: any) => {
-        if (!interactive) return;
-        boardRef.current?.measure((_x: number, _y: number, _w: number, _h: number, pageX: number, pageY: number) => {
-            const touchX = evt.nativeEvent.pageX - pageX;
-            const touchY = evt.nativeEvent.pageY - pageY;
-            const x = Math.round((touchX - PADDING) / cellSize);
-            const y = Math.round((touchY - PADDING) / cellSize);
-            if (x >= 0 && x < size && y >= 0 && y < size) {
-                onCellClick({ x, y });
-            }
-        });
-    }, [interactive, cellSize, size, onCellClick]);
+    const panResponder = useMemo(() => PanResponder.create({
+        onStartShouldSetPanResponder: () => interactive,
+        onMoveShouldSetPanResponder: () => false,
+        onPanResponderRelease: handleCellClick,
+        onPanResponderTerminate: handleCellClick,
+    }), [interactive, handleCellClick]);
 
     return (
-        <View
-            ref={boardRef}
-            style={styles.container}
-            onTouchEnd={handleTouchEnd}
-        >
-            <View pointerEvents="none">
-                <Svg
-                    width={BOARD_SIZE}
-                    height={BOARD_SIZE}
-                    viewBox={`0 0 ${BOARD_SIZE} ${BOARD_SIZE}`}
-                >
-                    <Defs>
-                        <RadialGradient id="blackGrad" cx="40%" cy="35%">
-                            <Stop offset="0%" stopColor="#555" />
-                            <Stop offset="100%" stopColor="#111" />
-                        </RadialGradient>
-                        <RadialGradient id="whiteGrad" cx="40%" cy="35%">
-                            <Stop offset="0%" stopColor="#fff" />
-                            <Stop offset="100%" stopColor="#ccc" />
-                        </RadialGradient>
-                    </Defs>
+        <View style={styles.container} {...panResponder.panHandlers}>
+            <Svg
+                width={BOARD_SIZE}
+                height={BOARD_SIZE}
+                viewBox={`0 0 ${BOARD_SIZE} ${BOARD_SIZE}`}
+                pointerEvents="none"
+            >
+                <Defs>
+                    <RadialGradient id="blackGrad" cx="40%" cy="35%">
+                        <Stop offset="0%" stopColor="#555" />
+                        <Stop offset="100%" stopColor="#111" />
+                    </RadialGradient>
+                    <RadialGradient id="whiteGrad" cx="40%" cy="35%">
+                        <Stop offset="0%" stopColor="#fff" />
+                        <Stop offset="100%" stopColor="#ccc" />
+                    </RadialGradient>
+                </Defs>
 
-                    <Rect x={0} y={0} width={BOARD_SIZE} height={BOARD_SIZE} fill="#DEB887" rx={8} />
+                <Rect x={0} y={0} width={BOARD_SIZE} height={BOARD_SIZE} fill="#DEB887" rx={8} />
 
-                    {Array.from({ length: size }, (_, i) => (
-                        <Line
-                            key={`h-${i}`}
-                            x1={PADDING}
-                            y1={PADDING + i * cellSize}
-                            x2={PADDING + (size - 1) * cellSize}
-                            y2={PADDING + i * cellSize}
-                            stroke="#1a1a1a"
-                            strokeWidth={0.8}
-                        />
-                    ))}
-                    {Array.from({ length: size }, (_, i) => (
-                        <Line
-                            key={`v-${i}`}
-                            x1={PADDING + i * cellSize}
-                            y1={PADDING}
-                            x2={PADDING + i * cellSize}
-                            y2={PADDING + (size - 1) * cellSize}
-                            stroke="#1a1a1a"
-                            strokeWidth={0.8}
-                        />
-                    ))}
+                {Array.from({ length: size }, (_, i) => (
+                    <Line
+                        key={`h-${i}`}
+                        x1={PADDING}
+                        y1={PADDING + i * cellSize}
+                        x2={PADDING + (size - 1) * cellSize}
+                        y2={PADDING + i * cellSize}
+                        stroke="#1a1a1a"
+                        strokeWidth={0.8}
+                    />
+                ))}
+                {Array.from({ length: size }, (_, i) => (
+                    <Line
+                        key={`v-${i}`}
+                        x1={PADDING + i * cellSize}
+                        y1={PADDING}
+                        x2={PADDING + i * cellSize}
+                        y2={PADDING + (size - 1) * cellSize}
+                        stroke="#1a1a1a"
+                        strokeWidth={0.8}
+                    />
+                ))}
 
-                    {starPoints.map(([sx, sy]) => (
-                        <Circle
-                            key={`star-${sx}-${sy}`}
-                            cx={PADDING + sx * cellSize}
-                            cy={PADDING + sy * cellSize}
-                            r={2.5}
-                            fill="#1a1a1a"
-                        />
-                    ))}
+                {starPoints.map(([sx, sy]) => (
+                    <Circle
+                        key={`star-${sx}-${sy}`}
+                        cx={PADDING + sx * cellSize}
+                        cy={PADDING + sy * cellSize}
+                        r={2.5}
+                        fill="#1a1a1a"
+                    />
+                ))}
 
-                    {grid.map((row, y) =>
-                        row.map((stone, x) => {
-                            if (stone === StoneColor.Empty) return null;
-                            const isLast = lastMove?.x === x && lastMove?.y === y;
-                            return (
-                                <G key={`stone-${x}-${y}`}>
+                {grid.map((row, y) =>
+                    row.map((stone, x) => {
+                        if (stone === StoneColor.Empty) return null;
+                        const isLast = lastMove?.x === x && lastMove?.y === y;
+                        return (
+                            <G key={`stone-${x}-${y}`}>
+                                <Circle
+                                    cx={PADDING + x * cellSize}
+                                    cy={PADDING + y * cellSize}
+                                    r={stoneRadius}
+                                    fill={stone === StoneColor.Black ? 'url(#blackGrad)' : 'url(#whiteGrad)'}
+                                />
+                                {isLast && (
                                     <Circle
                                         cx={PADDING + x * cellSize}
                                         cy={PADDING + y * cellSize}
-                                        r={stoneRadius}
-                                        fill={stone === StoneColor.Black ? 'url(#blackGrad)' : 'url(#whiteGrad)'}
+                                        r={stoneRadius * 0.25}
+                                        fill={stone === StoneColor.Black ? '#fff' : '#000'}
+                                        opacity={0.6}
                                     />
-                                    {isLast && (
-                                        <Circle
-                                            cx={PADDING + x * cellSize}
-                                            cy={PADDING + y * cellSize}
-                                            r={stoneRadius * 0.25}
-                                            fill={stone === StoneColor.Black ? '#fff' : '#000'}
-                                            opacity={0.6}
-                                        />
-                                    )}
-                                </G>
-                            );
-                        })
-                    )}
+                                )}
+                            </G>
+                        );
+                    })
+                )}
 
-                    {koPoint && (
-                        <Rect
-                            x={PADDING + koPoint.x * cellSize - stoneRadius * 0.5}
-                            y={PADDING + koPoint.y * cellSize - stoneRadius * 0.5}
-                            width={stoneRadius}
-                            height={stoneRadius}
-                            fill="none"
-                            stroke="red"
-                            strokeWidth={1.2}
-                            strokeDasharray="3,2"
-                            opacity={0.5}
-                        />
-                    )}
-                </Svg>
-            </View>
+                {koPoint && (
+                    <Rect
+                        x={PADDING + koPoint.x * cellSize - stoneRadius * 0.5}
+                        y={PADDING + koPoint.y * cellSize - stoneRadius * 0.5}
+                        width={stoneRadius}
+                        height={stoneRadius}
+                        fill="none"
+                        stroke="red"
+                        strokeWidth={1.2}
+                        strokeDasharray="3,2"
+                        opacity={0.5}
+                    />
+                )}
+            </Svg>
         </View>
     );
 });

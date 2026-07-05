@@ -89,9 +89,11 @@ function parseOwnership(ownershipStr: string, size: number): number[][] {
 function broadcast(gameId: string, game: GoGame, mode: string): void {
     const conns = connections.get(gameId);
     if (!conns) return;
+    const gameData = games.get(gameId);
+    const useEngine = gameData?.engine !== null;
     for (const ws of conns) {
         if (ws.readyState !== WebSocket.OPEN) continue;
-        const state = gameStateToResponse(gameId, game, mode);
+        const state = gameStateToResponse(gameId, game, mode, useEngine);
         const color = playerColors.get(ws);
         ws.send(JSON.stringify({
             type: 'state',
@@ -100,7 +102,7 @@ function broadcast(gameId: string, game: GoGame, mode: string): void {
     }
 }
 
-function gameStateToResponse(gameId: string, goGame: GoGame, mode: string = 'ai'): GameState {
+function gameStateToResponse(gameId: string, goGame: GoGame, mode: string = 'ai', useEngine: boolean = false): GameState {
     const board = goGame.getBoardState();
     const isHumanMode = mode === 'human' || mode === 'online';
     return {
@@ -108,8 +110,8 @@ function gameStateToResponse(gameId: string, goGame: GoGame, mode: string = 'ai'
         board,
         status: goGame.status,
         players: {
-            black: { name: 'Black', isAI: false },
-            white: { name: isHumanMode ? 'White' : (engineReady ? 'KataGo' : 'Simple AI'), isAI: !isHumanMode },
+            black: { name: isHumanMode ? 'Black' : 'You', isAI: false },
+            white: { name: isHumanMode ? 'White' : (useEngine ? 'KataGo' : 'Simple AI'), isAI: !isHumanMode },
         },
         currentTurn: board.currentTurn,
         lastMove: board.moveHistory.length > 0

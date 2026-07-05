@@ -1,21 +1,27 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { GameState, GameMessage, Position } from '../types/game';
+import { GameState, GameMessage, Position, AnalysisData } from '../types/game';
 
-const WS_URL = 'ws://localhost:3001/ws';
+function getWsUrl(): string {
+    const protocol = 'ws:';
+    const host = 'localhost:3001';
+    return `${protocol}//${host}/ws`;
+}
 
-export function useGame(gameId?: string, useKataGo?: boolean) {
+export function useGame(gameId?: string, useKataGo?: boolean, mode?: string) {
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [analysisResult, setAnalysisResult] = useState<AnalysisData | null>(null);
+    const [analyzing, setAnalyzing] = useState(false);
     const wsRef = useRef<WebSocket | null>(null);
-    const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+    const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const useKataGoRef = useRef(useKataGo);
     useKataGoRef.current = useKataGo;
 
     const connect = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-        const ws = new WebSocket(WS_URL);
+        const ws = new WebSocket(getWsUrl());
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -23,7 +29,7 @@ export function useGame(gameId?: string, useKataGo?: boolean) {
             setError(null);
             ws.send(JSON.stringify({
                 type: 'join',
-                payload: { gameId: gameId || undefined, useKataGo: useKataGoRef.current },
+                payload: { gameId: gameId || undefined, useKataGo: useKataGoRef.current, mode },
             }));
         };
 
@@ -32,8 +38,12 @@ export function useGame(gameId?: string, useKataGo?: boolean) {
                 const msg: GameMessage = JSON.parse(event.data);
                 if (msg.type === 'state') {
                     setGameState(msg.payload as GameState);
+                } else if (msg.type === 'analysis') {
+                    setAnalysisResult(msg.payload as AnalysisData);
+                    setAnalyzing(false);
                 } else if (msg.type === 'error') {
                     setError(msg.payload as string);
+                    setAnalyzing(false);
                 }
             } catch {
                 // ignore parse errors
@@ -88,6 +98,14 @@ export function useGame(gameId?: string, useKataGo?: boolean) {
         }
     }, []);
 
+    const sendAnalyze = useCallback(() => {
+        setAnalysisResult(null);
+        setAnalyzing(true);
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'analyze', payload: {} }));
+        }
+    }, []);
+
     return {
         gameState,
         connected,
@@ -97,5 +115,8 @@ export function useGame(gameId?: string, useKataGo?: boolean) {
         sendUndo,
         sendResign,
         newGame,
+        sendAnalyze,
+        analysisResult,
+        analyzing,
     };
 }

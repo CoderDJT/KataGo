@@ -6,7 +6,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 
 type RootStackParamList = {
     Home: undefined;
-    Game: { gameId: string; difficulty: string };
+    Game: { gameId: string; difficulty: string; mode?: string };
 };
 
 interface HomeScreenProps {
@@ -21,6 +21,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
     const handleNewGame = () => {
         navigation.navigate('Game', { gameId: 'new', difficulty });
+    };
+
+    const handleHumanVsHuman = () => {
+        navigation.navigate('Game', { gameId: 'new', difficulty: 'pro', mode: 'human' });
+    };
+
+    const handleOnline = () => {
+        navigation.navigate('Game', { gameId: 'new', difficulty: 'pro', mode: 'online' });
     };
 
     return (
@@ -77,6 +85,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
                 <TouchableOpacity style={styles.newGameButton} onPress={handleNewGame} activeOpacity={0.8}>
                     <Text style={styles.newGameButtonText}>{t.newGameVsAI}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.humanButton} onPress={handleHumanVsHuman} activeOpacity={0.8}>
+                    <Text style={styles.newGameButtonText}>{t.newGameHuman}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.onlineButton} onPress={handleOnline} activeOpacity={0.8}>
+                    <Text style={styles.newGameButtonText}>{t.newGameOnline}</Text>
                 </TouchableOpacity>
 
                 <Text style={styles.description}>{t.homeDescription}</Text>
@@ -194,8 +210,32 @@ const styles = StyleSheet.create({
         paddingHorizontal: 32,
         paddingVertical: 16,
         borderRadius: 14,
-        marginBottom: 24,
+        marginBottom: 12,
         shadowColor: '#059669',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    humanButton: {
+        backgroundColor: '#d97706',
+        paddingHorizontal: 32,
+        paddingVertical: 16,
+        borderRadius: 14,
+        marginBottom: 12,
+        shadowColor: '#d97706',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    onlineButton: {
+        backgroundColor: '#7c3aed',
+        paddingHorizontal: 32,
+        paddingVertical: 16,
+        borderRadius: 14,
+        marginBottom: 24,
+        shadowColor: '#7c3aed',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,

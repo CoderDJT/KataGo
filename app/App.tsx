@@ -8,7 +8,7 @@ import { LanguageProvider } from './src/i18n/LanguageContext';
 
 export type RootStackParamList = {
     Home: undefined;
-    Game: { gameId: string; difficulty: string };
+    Game: { gameId: string; difficulty: string; mode?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
